@@ -649,7 +649,7 @@ const IncomingDocuments = () => {
                     </div>
                     <div>
                       <span className="text-[#64748b] block text-[11px] font-medium">Confidence Score</span>
-                      <strong className="text-xs text-[#0f172a]">{inspectionInvoice.confidenceScore ?? 100}%</strong>
+                      <strong className="text-xs text-[#0f172a]">{(inspectionInvoice.confidenceScore !== null && inspectionInvoice.confidenceScore !== undefined && inspectionInvoice.confidenceScore >= 100) ? 100 : 0}%</strong>
                     </div>
                     <div>
                       <span className="text-[#64748b] block text-[11px] font-medium">Status</span>

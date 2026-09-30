@@ -61,10 +61,12 @@ const IssueChip = ({ severity }) => {
 };
 
 const getConfidenceBand = (score) => {
-  const pct = typeof score === 'number' ? Math.round(score) : 100;
-  if (pct >= 85) return { band: 'High', pct };
-  if (pct >= 60) return { band: 'Medium', pct };
-  return { band: 'Low', pct };
+  const num = typeof score === 'number' ? Number(score) : 0;
+  const pct = num >= 100 ? 100 : 0;
+  return {
+    band: pct === 100 ? 'High' : 'Low',
+    pct,
+  };
 };
 
 const formatRelativeAge = (dateStr) => {
@@ -85,8 +87,18 @@ const formatRelativeAge = (dateStr) => {
 
 const buildFormDataFromOcr = (invoice, ocrDoc) => {
   const fields = ocrDoc?.extracted_fields || {};
-  const confScore = ocrDoc?.confidence_score ?? invoice?.confidenceScore ?? 100;
-  const { band, pct } = getConfidenceBand(confScore);
+  const confScore = ocrDoc?.confidence_score ?? invoice?.confidenceScore ?? 0;
+  const fieldConfs = fields.field_confidences || {};
+
+  const getFieldConf = (key, val) => {
+    if (typeof fieldConfs[key] === 'number') {
+      return getConfidenceBand(fieldConfs[key]);
+    }
+    if (val === null || val === undefined || String(val).trim() === '') {
+      return { band: 'Low', pct: 0 };
+    }
+    return getConfidenceBand(confScore);
+  };
 
   const rawLines = Array.isArray(fields.line_items) ? fields.line_items : [];
   const mappedLines = rawLines.map((item, idx) => {
@@ -103,14 +115,16 @@ const buildFormDataFromOcr = (invoice, ocrDoc) => {
     const unitVal = item.unit_price || item.unit || item.rate || item['Rate/Price'] || item.col_3 || '';
     const amountVal = item.amount || item.total || item['Sub Total'] || item.col_4 || '';
 
+    const lineConf = (descVal && (unitVal || amountVal)) ? getConfidenceBand(confScore) : { band: 'Low', pct: 0 };
+
     return {
       key: `l_${idx + 1}`,
       desc: String(descVal || ''),
       qty: String(qtyVal || ''),
       unit: String(unitVal || ''),
       amount: String(amountVal || ''),
-      band,
-      pct,
+      band: lineConf.band,
+      pct: lineConf.pct,
     };
   });
 
@@ -123,21 +137,20 @@ const buildFormDataFromOcr = (invoice, ocrDoc) => {
     blobPath: invoice?.blobPath || '',
     blobUrl: invoice?.blobUrl || invoice?.previewUrl || '',
     header: [
-      { key: 'vendor_name', label: 'Vendor', value: fields.vendor_name || '', band, pct, source: 'extracted' },
-      { key: 'invoice_number', label: 'Invoice number', value: fields.invoice_number || '', band, pct, source: 'extracted' },
-      { key: 'invoice_date', label: 'Invoice date', value: fields.invoice_date || '', band, pct, source: 'extracted' },
-      { key: 'due_date', label: 'Due date', value: fields.due_date || '', band, pct, source: 'extracted' },
-      { key: 'currency', label: 'Currency', value: fields.currency || 'INR', band, pct, source: 'extracted' },
-      { key: 'customer_name', label: 'Customer / Bill to', value: fields.customer_name || '', band, pct, source: 'extracted' },
-      { key: 'document_type', label: 'Document type', value: ocrDoc?.document_type || invoice?.documentType || 'Tax Invoice', band, pct, source: 'extracted' },
+      { key: 'vendor_name', label: 'Vendor', value: fields.vendor_name || '', ...getFieldConf('vendor_name', fields.vendor_name), source: 'extracted' },
+      { key: 'invoice_number', label: 'Invoice number', value: fields.invoice_number || '', ...getFieldConf('invoice_number', fields.invoice_number), source: 'extracted' },
+      { key: 'invoice_date', label: 'Invoice date', value: fields.invoice_date || '', ...getFieldConf('invoice_date', fields.invoice_date), source: 'extracted' },
+      { key: 'due_date', label: 'Due date', value: fields.due_date || '', ...getFieldConf('due_date', fields.due_date), source: 'extracted' },
+      { key: 'currency', label: 'Currency', value: fields.currency || 'INR', ...getFieldConf('currency', fields.currency), source: 'extracted' },
+      { key: 'customer_name', label: 'Customer / Bill to', value: fields.customer_name || '', ...getFieldConf('customer_name', fields.customer_name), source: 'extracted' },
+      { key: 'document_type', label: 'Document type', value: ocrDoc?.document_type || invoice?.documentType || 'Tax Invoice', ...getConfidenceBand(ocrDoc?.document_type_confidence ?? confScore), source: 'extracted' },
       {
         key: 'gstin',
         label: 'Detected GSTIN(s)',
         value: Array.isArray(ocrDoc?.extracted_gstins) && ocrDoc.extracted_gstins.length > 0
           ? ocrDoc.extracted_gstins.join(', ')
           : '',
-        band,
-        pct,
+        ...getConfidenceBand(Array.isArray(ocrDoc?.extracted_gstins) && ocrDoc.extracted_gstins.length > 0 ? 100 : 0),
         source: 'extracted',
       },
     ],
@@ -147,24 +160,21 @@ const buildFormDataFromOcr = (invoice, ocrDoc) => {
         key: 'subtotal',
         label: 'Subtotal',
         value: fields.subtotal !== null && fields.subtotal !== undefined ? String(fields.subtotal) : '',
-        band,
-        pct,
+        ...getFieldConf('subtotal', fields.subtotal),
         source: 'extracted',
       },
       {
         key: 'tax_amount',
         label: 'Tax amount',
         value: fields.tax_amount !== null && fields.tax_amount !== undefined ? String(fields.tax_amount) : '',
-        band,
-        pct,
+        ...getFieldConf('tax_amount', fields.tax_amount),
         source: 'extracted',
       },
       {
         key: 'total_amount',
         label: 'Total due',
         value: fields.total_amount !== null && fields.total_amount !== undefined ? String(fields.total_amount) : '',
-        band,
-        pct,
+        ...getFieldConf('total_amount', fields.total_amount),
         source: 'extracted',
         grand: true,
       },
