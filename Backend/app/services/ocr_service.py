@@ -188,30 +188,33 @@ def _extract_fields_from_boxes(
     if fields.customer_name:
         fields.customer_name = re.sub(r"^M/s\.\s*", "", fields.customer_name).strip()
 
-    # --- Invoice Number ---
-    # First search for compound token like R-INV-2026-9055 or DN-2026-9055 or SVT/2024-25/0187
-    codes = re.findall(r"\b((?:DN|CN|R-INV|INV|SVT)[-/][A-Za-z0-9\-_/]{4,})\b", all_raw_text, re.I)
-    valid_codes = [c.strip().rstrip("-/") for c in codes if len(c.strip().rstrip("-/")) >= 6]
-    if valid_codes:
-        fields.invoice_number = max(valid_codes, key=len)
-    else:
-        inv_matches = re.findall(r"(?:Debit\s*Note\s*No|Credit\s*Note\s*No|Revised\s*Inv\s*No|Invoice\s*No|Inv\s*No|Invoice\s*#)[:\s\-]*([A-Za-z0-9\-_/]+)", combined_meta_text, re.I)
-        if inv_matches:
-            cand = inv_matches[0].strip()
-            if cand.endswith("-") or cand.endswith("/"):
-                full_m = re.search(re.escape(cand) + r"([A-Za-z0-9\-_/]+)", all_raw_text)
-                if full_m:
-                    cand = cand + full_m.group(1)
-            fields.invoice_number = cand
-
     # --- Original Invoice Number & PO Number ---
-    m_orig = re.search(r"(?:Original\s*Inv(?:oice)?(?:\s*No|#)?)[:\s\-]*([A-Za-z0-9\-_/]+)", combined_meta_text, re.I)
+    m_orig = re.search(r"(?:Original\s*Inv(?:oice)?(?:[\s\-:]*No|#)?)[:\s\-]*([A-Za-z0-9\-_/]+)", combined_meta_text, re.I)
     if m_orig:
-        fields.original_invoice_number = m_orig.group(1).strip()
+        cand_orig = m_orig.group(1).strip().rstrip("-/")
+        orig_full = re.search(re.escape(cand_orig) + r"[-/]?\s*([0-9]+)", all_raw_text)
+        if orig_full:
+            cand_orig = cand_orig + "-" + orig_full.group(1)
+        fields.original_invoice_number = cand_orig
 
     m_po = re.search(r"(?:Purchase\s*Order|PO\s*(?:#|No|Number)?)[:\s\-]*([A-Za-z0-9\-_/]+)", combined_meta_text, re.I)
     if m_po:
         fields.po_number = m_po.group(1).strip()
+
+    # --- Invoice Number ---
+    codes = re.findall(r"\b((?:DN|CN|R-INV|INV|SVT)[-/][A-Za-z0-9\-_/]{4,})\b", all_raw_text, re.I)
+    valid_codes = [c.strip().rstrip("-/") for c in codes if len(c.strip().rstrip("-/")) >= 6]
+    if fields.original_invoice_number:
+        clean_orig = re.sub(r"[^\w]", "", fields.original_invoice_number.lower())
+        valid_codes = [c for c in valid_codes if re.sub(r"[^\w]", "", c.lower()) != clean_orig]
+
+    if valid_codes:
+        pref = [c for c in valid_codes if c.upper().startswith(("DN", "CN", "R-INV", "SVT"))]
+        fields.invoice_number = max(pref, key=len) if pref else max(valid_codes, key=len)
+    else:
+        m_num = re.search(r"(?:Invoice\s*No|Inv\s*No|Debit\s*Note\s*No|Credit\s*Note\s*No|Revised\s*Inv\s*No)[:\s\-]+([A-Za-z0-9\-_/]+)", combined_meta_text, re.I)
+        if m_num:
+            fields.invoice_number = m_num.group(1).strip()
 
     # --- Dates ---
     m_due = re.search(r"(?:Payment\s*Due|Due\s*Date|Due\s*By)[:\s\-]*([0-3]?\d[/\-.][0-1]?\d[/\-.]\d{2,4}|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})", combined_meta_text, re.I)

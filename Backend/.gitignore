@@ -4,7 +4,6 @@ _pycache_
 .env
 Backend/.env
 Backend/uploads/
-uploads/
 .env
 Backend/.env
 Backend/uploads/
