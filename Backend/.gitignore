@@ -1,0 +1,10 @@
+.env*
+**/__pycache__/
+_pycache_
+.env
+Backend/.env
+Backend/uploads/
+.env
+Backend/.env
+Backend/uploads/
+uploads/
