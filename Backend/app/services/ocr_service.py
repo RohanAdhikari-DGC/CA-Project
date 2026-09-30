@@ -96,6 +96,24 @@ def _group_boxes_into_lines(box_list: List[_UnifiedBox], y_thresh: float = 6.0) 
     return lines
 
 
+def _compute_field_confidences(fields: ExtractedInvoiceFields, overall_conf: float = 100.0) -> Dict[str, float]:
+    """Compute strict 100.0 or 0.0 confidence for each field (never 80 or 90)."""
+    conf = 100.0 if overall_conf >= 100.0 else 0.0
+    return {
+        "invoice_number": 100.0 if (fields.invoice_number and conf == 100.0) else 0.0,
+        "invoice_date": 100.0 if (fields.invoice_date and conf == 100.0) else 0.0,
+        "due_date": 100.0 if (fields.due_date and conf == 100.0) else 0.0,
+        "vendor_name": 100.0 if (fields.vendor_name and conf == 100.0) else 0.0,
+        "customer_name": 100.0 if (fields.customer_name and conf == 100.0) else 0.0,
+        "total_amount": 100.0 if (fields.total_amount is not None and conf == 100.0) else 0.0,
+        "subtotal": 100.0 if (fields.subtotal is not None and conf == 100.0) else 0.0,
+        "tax_amount": 100.0 if (fields.tax_amount is not None and conf == 100.0) else 0.0,
+        "currency": 100.0 if (fields.currency and conf == 100.0) else 0.0,
+        "po_number": 100.0 if (fields.po_number and conf == 100.0) else 0.0,
+        "original_invoice_number": 100.0 if (fields.original_invoice_number and conf == 100.0) else 0.0,
+    }
+
+
 def _extract_fields_from_boxes(
     boxes: List[_UnifiedBox],
     page_width: float,

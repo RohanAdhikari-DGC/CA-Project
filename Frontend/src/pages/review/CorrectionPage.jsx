@@ -40,10 +40,12 @@ const SourceTag = ({ source }) => {
 };
 
 const getConfidenceBand = (score) => {
-  const pct = typeof score === 'number' ? Math.round(score) : 100;
-  if (pct >= 85) return { band: 'High', pct };
-  if (pct >= 60) return { band: 'Medium', pct };
-  return { band: 'Low', pct };
+  const num = typeof score === 'number' ? Number(score) : 0;
+  const pct = num >= 100 ? 100 : 0;
+  return {
+    band: pct === 100 ? 'High' : 'Low',
+    pct,
+  };
 };
 
 const formatRelativeAge = (dateStr) => {
@@ -64,8 +66,18 @@ const formatRelativeAge = (dateStr) => {
 
 const buildCorrectionFormData = (invoice, ocrDoc) => {
   const fields = ocrDoc?.extracted_fields || {};
-  const confScore = ocrDoc?.confidence_score ?? invoice?.confidenceScore ?? 100;
-  const { band, pct } = getConfidenceBand(confScore);
+  const confScore = ocrDoc?.confidence_score ?? invoice?.confidenceScore ?? 0;
+  const fieldConfs = fields.field_confidences || {};
+
+  const getFieldConf = (key, val) => {
+    if (typeof fieldConfs[key] === 'number') {
+      return getConfidenceBand(fieldConfs[key]);
+    }
+    if (val === null || val === undefined || String(val).trim() === '') {
+      return { band: 'Low', pct: 0 };
+    }
+    return getConfidenceBand(confScore);
+  };
 
   const rawLines = Array.isArray(fields.line_items) ? fields.line_items : [];
   const mappedLines = rawLines.map((item, idx) => {
@@ -81,14 +93,16 @@ const buildCorrectionFormData = (invoice, ocrDoc) => {
     const unitVal = item.unit_price || item.unit || item.rate || item.col_3 || '';
     const amountVal = item.amount || item.total || item.col_4 || '';
 
+    const lineConf = (descVal && (unitVal || amountVal)) ? getConfidenceBand(confScore) : { band: 'Low', pct: 0 };
+
     return {
       key: `l_${idx + 1}`,
       desc: String(descVal || ''),
       qty: String(qtyVal || ''),
       unit: String(unitVal || ''),
       amount: String(amountVal || ''),
-      band,
-      pct,
+      band: lineConf.band,
+      pct: lineConf.pct,
     };
   });
 
@@ -100,18 +114,18 @@ const buildCorrectionFormData = (invoice, ocrDoc) => {
     pageCount: ocrDoc?.page_count || 1,
     blobPath: invoice?.blobPath || '',
     header: [
-      { key: 'vendor_name', label: 'Vendor', value: fields.vendor_name || '', band, pct, source: 'extracted', empty: !fields.vendor_name },
-      { key: 'invoice_number', label: 'Invoice number', value: fields.invoice_number || '', band, pct, source: 'extracted', empty: !fields.invoice_number },
-      { key: 'invoice_date', label: 'Invoice date', value: fields.invoice_date || '', band, pct, source: 'extracted', empty: !fields.invoice_date },
-      { key: 'due_date', label: 'Due date', value: fields.due_date || '', band, pct, source: 'extracted', empty: !fields.due_date },
-      { key: 'currency', label: 'Currency', value: fields.currency || 'INR', band, pct, source: 'extracted', empty: false },
-      { key: 'customer_name', label: 'Customer / Bill to', value: fields.customer_name || '', band, pct, source: 'extracted', empty: !fields.customer_name },
+      { key: 'vendor_name', label: 'Vendor', value: fields.vendor_name || '', ...getFieldConf('vendor_name', fields.vendor_name), source: 'extracted', empty: !fields.vendor_name },
+      { key: 'invoice_number', label: 'Invoice number', value: fields.invoice_number || '', ...getFieldConf('invoice_number', fields.invoice_number), source: 'extracted', empty: !fields.invoice_number },
+      { key: 'invoice_date', label: 'Invoice date', value: fields.invoice_date || '', ...getFieldConf('invoice_date', fields.invoice_date), source: 'extracted', empty: !fields.invoice_date },
+      { key: 'due_date', label: 'Due date', value: fields.due_date || '', ...getFieldConf('due_date', fields.due_date), source: 'extracted', empty: !fields.due_date },
+      { key: 'currency', label: 'Currency', value: fields.currency || 'INR', ...getFieldConf('currency', fields.currency), source: 'extracted', empty: false },
+      { key: 'customer_name', label: 'Customer / Bill to', value: fields.customer_name || '', ...getFieldConf('customer_name', fields.customer_name), source: 'extracted', empty: !fields.customer_name },
     ],
     lines: mappedLines,
     totals: [
-      { key: 'subtotal', label: 'Subtotal', value: fields.subtotal !== null && fields.subtotal !== undefined ? String(fields.subtotal) : '', band, pct, source: 'extracted', empty: fields.subtotal === null || fields.subtotal === undefined },
-      { key: 'tax_amount', label: 'Tax', value: fields.tax_amount !== null && fields.tax_amount !== undefined ? String(fields.tax_amount) : '', band, pct, source: 'extracted', empty: false },
-      { key: 'total_amount', label: 'Total due', value: fields.total_amount !== null && fields.total_amount !== undefined ? String(fields.total_amount) : '', band, pct, source: 'extracted', empty: fields.total_amount === null || fields.total_amount === undefined, grand: true },
+      { key: 'subtotal', label: 'Subtotal', value: fields.subtotal !== null && fields.subtotal !== undefined ? String(fields.subtotal) : '', ...getFieldConf('subtotal', fields.subtotal), source: 'extracted', empty: fields.subtotal === null || fields.subtotal === undefined },
+      { key: 'tax_amount', label: 'Tax', value: fields.tax_amount !== null && fields.tax_amount !== undefined ? String(fields.tax_amount) : '', ...getFieldConf('tax_amount', fields.tax_amount), source: 'extracted', empty: false },
+      { key: 'total_amount', label: 'Total due', value: fields.total_amount !== null && fields.total_amount !== undefined ? String(fields.total_amount) : '', ...getFieldConf('total_amount', fields.total_amount), source: 'extracted', empty: fields.total_amount === null || fields.total_amount === undefined, grand: true },
     ],
   };
 };
