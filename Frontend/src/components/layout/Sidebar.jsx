@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAppContext } from '../../context/AppContext';
+import invoiceService from '../../services/invoice_service';
 
 const SHORTCUTS = [
   ['J', 'Next document'], 
@@ -17,8 +18,34 @@ const SHORTCUTS = [
 const Sidebar = () => {
   const { activeClient, visibleClients, canSeePractice, switchScope } = useAppContext();
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [counts, setCounts] = useState({ total: 0, pending: 0, correction: 0, flagged: 0 });
   const navigate = useNavigate();
+  const location = useLocation();
   const inClient = !!activeClient;
+
+  // Fetch real queue counts from backend
+  useEffect(() => {
+    if (!inClient) return;
+    let isMounted = true;
+    Promise.all([
+      invoiceService.getInvoicesCount({}).catch(() => 0),
+      invoiceService.getInvoicesCount({ status: 'pending_review' }).catch(() => 0),
+      invoiceService.getInvoicesCount({ status: 'correction' }).catch(() => 0),
+      invoiceService.getInvoicesCount({ status: 'flagged' }).catch(() => 0),
+    ]).then(([total, pending, correction, flagged]) => {
+      if (isMounted) {
+        setCounts({
+          total: typeof total === 'number' ? total : 0,
+          pending: typeof pending === 'number' ? pending : 0,
+          correction: typeof correction === 'number' ? correction : 0,
+          flagged: typeof flagged === 'number' ? flagged : 0,
+        });
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [inClient, activeClient?.id, location.pathname]);
 
   // Close modal on Escape key press
   useEffect(() => {
@@ -81,7 +108,7 @@ const Sidebar = () => {
               <NavLink to="/incoming" className={clientLinkClass}>
                 <span className="w-4 text-center text-[13px] opacity-85" aria-hidden="true">▤</span>
                 Incoming Documents
-                <span className="ml-auto text-[11px] font-semibold bg-[#eef0f3] text-[#5a6472] rounded-[20px] px-[7px] py-[1px]">{activeClient.docs || 248}</span>
+                <span className="ml-auto text-[11px] font-semibold bg-[#eef0f3] text-[#5a6472] rounded-[20px] px-[7px] py-[1px]">{counts.total}</span>
               </NavLink>
             </div>
 
@@ -93,7 +120,7 @@ const Sidebar = () => {
                     <span className="w-4 text-center text-[13px] opacity-85" aria-hidden="true">◧</span>
                     Pending Review
                     <span className={`ml-auto text-[11px] font-semibold rounded-[20px] px-[7px] py-[1px] ${isActive ? 'bg-[#cfe1f6] text-[#0b4f96]' : 'bg-[#eef0f3] text-[#5a6472]'}`}>
-                      42
+                      {counts.pending}
                     </span>
                   </>
                 )}
@@ -104,7 +131,7 @@ const Sidebar = () => {
                     <span className="w-4 text-center text-[13px] opacity-85" aria-hidden="true">✎</span>
                     Correction
                     <span className={`ml-auto text-[11px] font-semibold rounded-[20px] px-[7px] py-[1px] ${isActive ? 'bg-[#cfe1f6] text-[#0b4f96]' : 'bg-[#eef0f3] text-[#5a6472]'}`}>
-                      17
+                      {counts.correction}
                     </span>
                   </>
                 )}
@@ -115,7 +142,7 @@ const Sidebar = () => {
                     <span className="w-4 text-center text-[13px] opacity-85" aria-hidden="true">⚑</span>
                     Flagged
                     <span className={`ml-auto text-[11px] font-semibold rounded-[20px] px-[7px] py-[1px] ${isActive ? 'bg-[#cfe1f6] text-[#0b4f96]' : 'bg-[#eef0f3] text-[#5a6472]'}`}>
-                      9
+                      {counts.flagged}
                     </span>
                   </>
                 )}

@@ -4,7 +4,7 @@ import DashboardPage from '../pages/dashboard/DashboardPage';
 import PracticeDashboardPage from '../pages/practice/PracticeDashboardPage';
 import CrossClientDocumentsPage from '../pages/practice/CrossClientDocumentsPage';
 import ClientOnboarding from '../pages/practice/ClientOnboarding';
-import Invoices from '../pages/invoice/Invoices';
+import IncomingDocuments from '../pages/invoice/IncomingDocuments';
 import PendingReviewPage from '../pages/review/PendingReviewPage';
 import CorrectionPage from '../pages/review/CorrectionPage';
 import FlaggedPage from '../pages/review/FlaggedPage';
@@ -26,7 +26,7 @@ const AppRoutes = () => {
         <Route path="onboarding" element={<ClientOnboarding />} />
         
         {/* Core Queues & Docs */}
-        <Route path="incoming" element={<Invoices />} />
+        <Route path="incoming" element={<IncomingDocuments />} />
         <Route path="pending" element={<PendingReviewPage />} />
         <Route path="correction" element={<CorrectionPage />} />
         <Route path="flagged" element={<FlaggedPage />} />
